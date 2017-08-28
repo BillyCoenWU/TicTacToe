@@ -9,79 +9,12 @@ using Newtonsoft.Json;
 using System.Collections.Generic;
 #endregion
 
-[System.Serializable]
 public struct Jogada
 {
 	public string player;
 
 	public int x;
 	public int y;
-}
-
-[System.Serializable]
-public struct TicTacToe
-{
-	private bool m_playerOneJogada;
-
-	public Queue<Jogada> jogadas;
-	public LinkedList<Jogada> linkedJogadas;
-
-	private Stack<string> m_playerOne;
-	private Stack<string> m_playerTwo;
-
-	public string[,] map;
-
-	public void Start ()
-	{
-		m_playerOneJogada = true;
-
-		jogadas = new Queue<Jogada>();
-		m_playerOne = new Stack<string>();
-		m_playerTwo = new Stack<string>();
-		linkedJogadas = new LinkedList<Jogada>();
-
-		for(int  i = 0; i < 5; i ++)
-		{
-			m_playerOne.Push(Game.X);
-			m_playerTwo.Push(Game.O);
-		}
-
-		map = new string[3,3]	{	{ Game.NONE, Game.NONE, Game.NONE },
-									{ Game.NONE, Game.NONE, Game.NONE },
-									{ Game.NONE, Game.NONE, Game.NONE }	};
-	}
-
-	public int StackOneCount ()
-	{
-		return m_playerOne.Count;
-	}
-
-	public int StackTwoCount ()
-	{
-		return m_playerTwo.Count;
-	}
-
-	public string Jogada (int x, int y)
-	{
-		map[x, y] = m_playerOneJogada ? m_playerOne.Pop() : m_playerTwo.Pop();
-
-		m_playerOneJogada = !m_playerOneJogada;
-
-		Jogada j = new Jogada();
-		j.player = map[x, y];
-		j.x = x;
-		j.y = y;
-
-		jogadas.Enqueue(j);
-
-		if(linkedJogadas.Count == 0)
-		{
-			linkedJogadas.AddFirst(j);
-		}
-		else linkedJogadas.AddLast(j);
-
-		return map[x, y];
-	}
 }
 
 public class Game : MonoBehaviour
@@ -98,13 +31,12 @@ public class Game : MonoBehaviour
 
 	private const string DRAW = "Empatou!";
 	private const string PLAY_ALONE = "PlayAlone";
-	private const string FREE_HOUSES = "Casas livres: ";
 	private const string PLAYER_ONE_WIN = "Player 1 venceu!";
 	private const string PLAYER_TWO_WIN = "Player 2 venceu!";
 
 	private string m_path = string.Empty;
 
-	[SerializeField]
+    [SerializeField]
 	private bool m_save = false;
 	[SerializeField]
 	private bool m_geraJson = false;
@@ -112,16 +44,24 @@ public class Game : MonoBehaviour
 	private bool m_startAlone = false;
 	[SerializeField]
 	private bool m_resetAlone = false;
+    private bool m_playerOneJogada = true;
 
-	[SerializeField]
+    [SerializeField]
 	private GameObject m_resetButton = null;
 
 	[SerializeField]
 	private ButtonData[] m_buttons = null;
 
-	private List<int> m_indexs = new List<int>();
-	private TicTacToe m_tictactoe = new TicTacToe();
-	private List<Queue<Jogada>> m_partidas = new List<Queue<Jogada>>();
+    private string[,] m_map = null;
+
+    private List<int> m_indexs = new List<int>();
+
+    private Stack<string> m_playerOne = new Stack<string>();
+    private Stack<string> m_playerTwo = new Stack<string>();
+
+    private LinkedList<Jogada> m_linkedJogadas = new LinkedList<Jogada>();
+
+    private List<LinkedList<Jogada>> m_partidas = new List<LinkedList<Jogada>>();
 
 	private static Game s_instance = null;
 	public static Game Instance
@@ -151,10 +91,19 @@ public class Game : MonoBehaviour
 
 	public void NovaPartida ()
 	{
-		m_tictactoe = new TicTacToe();
-		m_tictactoe.Start();
+        m_playerOneJogada = true;
 
-		m_resetButton.SetActive(false);
+        for (int i = 0; i < 5; i++)
+        {
+            m_playerOne.Push(X);
+            m_playerTwo.Push(O);
+        }
+
+        m_map = new string[3, 3]    {   { NONE, NONE, NONE },
+                                        { NONE, NONE, NONE },
+                                        { NONE, NONE, NONE } };
+
+        m_resetButton.SetActive(false);
 
 		for(int i = 0; i < m_buttons.Length; i++)
 		{
@@ -178,12 +127,26 @@ public class Game : MonoBehaviour
 	{
 		if(CheckFreeHouse (m_buttons[index].x, m_buttons[index].y))
 		{
-			m_buttons[index].campo.text = m_tictactoe.Jogada(m_buttons[index].x, m_buttons[index].y);
+            m_map[m_buttons[index].x, m_buttons[index].y] = m_playerOneJogada ? m_playerOne.Pop() : m_playerTwo.Pop();
+            m_buttons[index].campo.text = m_map[m_buttons[index].x, m_buttons[index].y];
+
+            m_playerOneJogada = !m_playerOneJogada;
+
+            Jogada j = new Jogada();
+            j.player = m_map[m_buttons[index].x, m_buttons[index].y];
+            j.x = m_buttons[index].x;
+            j.y = m_buttons[index].y;
+            
+            if (m_linkedJogadas.Count == 0)
+            {
+                m_linkedJogadas.AddFirst(j);
+            }
+            else m_linkedJogadas.AddLast(j);
 		}
 
 		CheckFreeHouses();
 
-		if(m_tictactoe.StackOneCount() <= 2)
+		if(m_playerOne.Count <= 2)
 		{
 			CheckVictory();
 		}
@@ -197,7 +160,7 @@ public class Game : MonoBehaviour
 		NovaJogada(valor);
 	}
 
-	private void CheckFreeHouses ()
+	private int CheckFreeHouses ()
 	{
 		int count = 0;
 
@@ -212,25 +175,23 @@ public class Game : MonoBehaviour
 			}
 		}
 
-		#if UNITY_EDITOR
-		Debug.Log(FREE_HOUSES + count);
-		#endif
+        return count;
 	}
 
 	private bool CheckFreeHouse (int x, int y)
 	{
-		return (m_tictactoe.map[x,y] == NONE);
+		return (m_map[x,y] == NONE);
 	}
 
 	private void CheckVictory ()
 	{
 		for(int x = 0; x < 3; x++)
 		{
-			if(m_tictactoe.map[x, 0] != NONE)
+			if(m_map[x, 0] != NONE)
 			{
-				if(WonX (m_tictactoe.map[x, 0], x))
+				if(WonX (m_map[x, 0], x))
 				{
-					EndGame (m_tictactoe.map[x, 0]);
+					EndGame (m_map[x, 0]);
 					return;
 				}
 			}
@@ -238,35 +199,35 @@ public class Game : MonoBehaviour
 
 		for(int y = 0; y < 3; y++)
 		{
-			if(m_tictactoe.map[0, y] != NONE)
+			if(m_map[0, y] != NONE)
 			{
-				if(WonY (m_tictactoe.map[0, y], y))
+				if(WonY (m_map[0, y], y))
 				{
-					EndGame (m_tictactoe.map[0, y]);
+					EndGame (m_map[0, y]);
 					return;
 				}
 			}
 		}
 
-		if(m_tictactoe.map[0, 0] != NONE)
+		if(m_map[0, 0] != NONE)
 		{
-			if(WonDiagonalOne(m_tictactoe.map[0, 0]))
+			if(WonDiagonalOne(m_map[0, 0]))
 			{
-				EndGame (m_tictactoe.map[0, 0]);
+				EndGame (m_map[0, 0]);
 				return;
 			}
 		}
 
-		if(m_tictactoe.map[0, 2] != NONE)
+		if(m_map[0, 2] != NONE)
 		{
-			if(WonDiagonalTwo(m_tictactoe.map[0, 2]))
+			if(WonDiagonalTwo(m_map[0, 2]))
 			{
-				EndGame (m_tictactoe.map[0, 2]);
+				EndGame (m_map[0, 2]);
 				return;
 			}
 		}
 
-		if(m_tictactoe.StackOneCount() == 0 && m_tictactoe.StackTwoCount() == 1)
+		if(CheckFreeHouses() == 0)
 		{
 			Empate();
 		}
@@ -276,7 +237,7 @@ public class Game : MonoBehaviour
 	{
 		for(int y = 1; y < 3; y++)
 		{
-			if(m_tictactoe.map[x, y] != player)
+			if(m_map[x, y] != player)
 			{
 				return false;
 			}
@@ -289,7 +250,7 @@ public class Game : MonoBehaviour
 	{
 		for(int x = 1; x < 3; x++)
 		{
-			if(m_tictactoe.map[x, y] != player)
+			if(m_map[x, y] != player)
 			{
 				return false;
 			}
@@ -300,12 +261,12 @@ public class Game : MonoBehaviour
 
 	private bool WonDiagonalOne (string player)
 	{
-		return !(m_tictactoe.map[1, 1] != player || m_tictactoe.map[2, 2] != player);
+		return !(m_map[1, 1] != player || m_map[2, 2] != player);
 	}
 
 	private bool WonDiagonalTwo (string player)
 	{
-		return !(m_tictactoe.map[1, 1] != player || m_tictactoe.map[2, 0] != player);
+		return !(m_map[1, 1] != player || m_map[2, 0] != player);
 	}
 
 	private void EndGame (string player)
@@ -356,7 +317,7 @@ public class Game : MonoBehaviour
 
 	private void m_savePartida ()
 	{
-		m_partidas.Add(m_tictactoe.jogadas);
+		m_partidas.Add(m_linkedJogadas);
 
 		if(m_geraJson)
 		{
@@ -372,7 +333,7 @@ public class Game : MonoBehaviour
 	{
 		m_partidas.Clear();
 
-		m_partidas = JsonConvert.DeserializeObject<List<Queue<Jogada>>>(File.ReadAllText(m_path));
+		m_partidas = JsonConvert.DeserializeObject<List<LinkedList<Jogada>>>(File.ReadAllText(m_path));
 	}
 
 	#endregion
